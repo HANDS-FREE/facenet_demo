@@ -13,4 +13,11 @@ the shape_predictor_68_face_landmarks.dat
 is a face_landmark file based on dlib
 
 
-in the 
+in the <face_net_recognizer>\scripts\face_recognize\templates
+we have two sample people and a describe_csv file
+
+change them to what ever you want to use in the face_recognitio :)
+
+facenet is based on google's paperFaceNet: A Unified Embedding for Face Recognition and Clustering
+it use a novel method mot formillar with the classfiermodel
+so only one templates and on training would perfomes well :)
