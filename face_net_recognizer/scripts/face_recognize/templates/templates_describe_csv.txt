@@ -1,0 +1,2 @@
+/home/air/workSpace/src/face_net_recognizer/scripts/face_recognize/templates/img_8.jpg;1
+/home/air/workSpace/src/face_net_recognizer/scripts/face_recognize/templates/img_25.jpg;2

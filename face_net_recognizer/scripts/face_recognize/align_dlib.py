@@ -190,7 +190,7 @@ class AlignDlib:
         if bb is None:
             bb = self.getLargestFaceBoundingBox(rgbImg, skipMulti)
             if bb is None:
-                return
+                return None,None
 
         if landmarks is None:
             landmarks = self.findLandmarks(rgbImg, bb)
@@ -205,7 +205,7 @@ class AlignDlib:
         # cv2.imshow("img2",thumbnail)
         # cv2.waitKey(0)
 
-        return thumbnail
+        return thumbnail,((bb.left(),bb.top()),(bb.right(),bb.bottom()))
 
     def align_new(self, imgDim, rgbImg, bb=None,
                  landmarks=None, landmarkIndices=INNER_EYES_AND_BOTTOM_LIP,

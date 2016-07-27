@@ -5,29 +5,51 @@ import rospy
 import numpy as np
 import cv2
 import face_recognizer
-#from face_tracker.srv import *
 from sensor_msgs.msg import Image as sensorImg
 from cv_bridge import CvBridge,CvBridgeError
 import message_filters
-# from dqn_node.srv import frameScore_withIMG,frameScore_withIMGRequest,environment,environmentResponse
-#from dqn_node.srv import environment, environmentResponse
-import time
+from face_net_recognizer.srv import frame_beliefs,frame_beliefsResponse,frame_beliefsRequest
+import thread
 
-class rewardService:
-    def __init__(self):
+class build_service_and_recognize():
+    def __init__(self,template_file_list_name,model_file,dlib_face_predictor):
+        self.recognizer = face_recognizer.face_recognizer(model_file,dlib_face_predictor)
+        if not self.recognizer.set_inside_templates(template_file_list_name):
+            print "fail"
+            exit()
         self.bridge = CvBridge()
-        self.service = rospy.Service('Environment',"<your message type>",self.rewardHandle)
-        self.new = False
+        self.service = rospy.Service('frame_beliefs',frame_beliefs,self.process)
         return
 
-    def rewardHandle(self,req):
-        action = req.action
-        image,reward,terminal=self.env.get_image_and_reward(action)
-        rpy = environmentResponse()
-        rpy.reward = reward
-        rpy.terminal = terminal
-        rpy.img = self.bridge.cv2_to_imgmsg(image, 'bgr8')
-        self.new = True
+    def process(self,req):
+        img = req.img
+        grd_truth = req.grdTruth
+
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(img, "bgr8")
+        except CvBridgeError as e:
+            print(e)
+
+        labels, belifs, bounding_box_list = self.recognizer.compare_with_templates([cv_image])
+
+        if labels == None:
+            cv2.putText(cv_image, "no face detected", (20, 40), cv2.FONT_ITALIC, 1, (0, 0, 255), 2, 4)
+        else:
+            bb = bounding_box_list[0]
+            label = labels[0]
+            belief = np.asarray(belifs[0])
+            belief = belief[np.argmax(belief)]
+            text = "lbl=" + str(label) + " pro=" + str(belief)
+            cv2.putText(cv_image, text, (20, 40), cv2.FONT_ITALIC, 1, (0, 255, 0), 2, 4)
+            bounding_box_list = list(bounding_box_list)
+            cv2.rectangle(cv_image, bb[0], bb[1], (255, 255, 0), 4)
+        cv2.imshow("Image window", cv_image)
+        key = cv2.waitKey(3)
+        if key == 'q':
+            exit()
+
+        rpy = frame_beliefsResponse()
+        rpy.score = belifs[0]
         return rpy
 
     def loop(self):
@@ -37,52 +59,53 @@ class rewardService:
                 self.new = False
             rospy.sleep(0.01)
 
-class subscribe_image_and_recognize_face():
-    def __init__(self,template_file_list,subscribe_topic_name):
-        self.recognizer = face_recognizer.face_recognizer()
-        if not self.recognizer.set_inside_templates(template_file_list):
+class subscribe_image_and_recognize():
+    def __init__(self,template_file_list_name,subscribe_topic_name,model_file,dlib_face_predictor):
+        self.recognizer = face_recognizer.face_recognizer(model_file,dlib_face_predictor)
+        if not self.recognizer.set_inside_templates(template_file_list_name):
             print "fail"
             exit()
         self.bridge = CvBridge()
-        # message_filters.Subscriber()
-        # self.image_sub = rospy.Subscriber(subscribe_topic_name, sensorImg, self.callback,queue_size=1,tcp_nodelay=True)
-        '''pleas read here  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> '''
+
         sub = message_filters.Subscriber(subscribe_topic_name, sensorImg)
         self.cache = message_filters.Cache(sub, 100)
+        thread.start_new_thread(self.run,())
 
     def run(self):
-        while True:
+        flag = True
+        while flag:
             data = self.cache.getElemAfterTime(self.cache.getLastestTime())
-            self.callback(data)
-
-''''...........................................................'''
-
+            if data == None:
+                pass
+            else:
+                flag = self.callback(data)
 
     def callback(self,data):
-        time1 = time.clock()
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
 
+        if cv_image == None:
+            return True
 
-        time2 = time.clock()
-
-        labels,belifs = self.recognizer.compare_with_templates([cv_image])
-
-        time3 = time.clock()
+        labels,belifs,bounding_box_list = self.recognizer.compare_with_templates([cv_image])
 
         if labels == None:
             cv2.putText(cv_image,"no face detected",(20,40),cv2.FONT_ITALIC,1,(0,0,255),2,4)
         else:
+            bb = bounding_box_list[0]
             label = labels[0]
             belief = np.asarray(belifs[0])
             belief = belief[np.argmax(belief)]
             text = "lbl="+str(label)+" pro="+str(belief)
             cv2.putText(cv_image,text,(20,40),cv2.FONT_ITALIC,1,(0,255,0),2,4)
+            cv2.rectangle(cv_image,bb[0],bb[1],(255,255,0),4)
         cv2.imshow("Image window", cv_image)
-        cv2.waitKey(3)
+        key = cv2.waitKey(3)
+        if key == 'q':
+            return False
 
-        print time2-time1,time3-time2
+        return True
 
 
